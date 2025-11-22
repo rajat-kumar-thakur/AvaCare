@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+SpeechRecognition
+gtts
+pygame
+opencv-python
+numpy
+langchain
+langchain-openai
+langchain-google-genai
+langgraph
+pydub
+requests
+pyaudio
