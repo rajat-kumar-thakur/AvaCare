@@ -70,8 +70,6 @@ export default function ChatPage() {
         setIsProcessing(true);
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.wav');
-        formData.append('expression', 'Neutral');
-        formData.append('expression_confidence', '1.0');
 
         try {
             const response = await api.post('/process-audio', formData);
