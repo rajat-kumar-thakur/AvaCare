@@ -51,10 +51,10 @@ export default function AnimatedSphere({ isListening, isSpeaking, isProcessing }
         gradient.addColorStop(1, "rgba(59, 130, 246, 0.4)")
       } else if (isListening) {
         gradient.addColorStop(0, "rgba(236, 72, 153, 0.8)") // pink
-        gradient.addColorStop(0.5, "rgba(168, 85, 247, 0.6)") // purple
+        gradient.addColorStop(0.5, "rgba(71, 85, 105, 0.6)") // slate-600
         gradient.addColorStop(1, "rgba(236, 72, 153, 0.4)")
       } else if (isProcessing) {
-        gradient.addColorStop(0, "rgba(168, 85, 247, 0.6)") // purple
+        gradient.addColorStop(0, "rgba(71, 85, 105, 0.6)") // slate-600
         gradient.addColorStop(0.5, "rgba(59, 130, 246, 0.5)") // blue
         gradient.addColorStop(1, "rgba(168, 85, 247, 0.4)")
       } else {
