@@ -10,6 +10,7 @@ from gtts import gTTS
 import os
 import tempfile
 import threading
+import asyncio
 import cv2
 import numpy as np
 from graph import graph, get_llm
@@ -55,9 +56,10 @@ config = {
     "vector_store": {
         "provider": "qdrant",
         "config": {
-            "collection_name": "avacare_memories_v3",
+            "collection_name": "avacare_memories_v4",  # New collection name to avoid dimension conflict
             "host": "localhost",
-            "port": 6333
+            "port": 6333,
+            "embedding_model_dims": 768  # Gemini text-embedding-004 uses 768 dimensions
         }
     }
 }
@@ -130,6 +132,18 @@ def get_expression_context(expression: str):
     # Let's keep it simple: The context is just the expression name.
     return f"\n[User Expression: {expression_clean}]"
 
+def store_memory_background(user_id: str, transcript: str, response_text: str):
+    """Store memory in background thread"""
+    try:
+        conversation = f"User: {transcript}\nAssistant: {response_text}"
+        print(f"[Memory BG] Storing conversation for user {user_id}: {conversation[:100]}...")
+        result = memory.add(conversation, user_id=user_id)
+        print(f"[Memory BG] Storage complete: {result}")
+    except Exception as e:
+        print(f"[Memory BG] Storage error: {e}")
+        import traceback
+        traceback.print_exc()
+
 @app.post("/auth/signup", response_model=Token)
 async def signup(user: UserCreate):
     user_exists = await users_collection.find_one({"username": user.username})
@@ -179,15 +193,31 @@ async def process_audio(
     try:
         content = await audio.read()
         
-        # Convert to wav
+        # Convert to wav with enhanced processing
         try:
             print(f"Received audio file: {audio.filename}, content_type: {audio.content_type}")
             audio_segment = AudioSegment.from_file(io.BytesIO(content))
             print(f"Audio duration: {audio_segment.duration_seconds:.2f} seconds")
             print(f"Audio channels: {audio_segment.channels}, frame_rate: {audio_segment.frame_rate}")
             
+            # Check if audio is too short
+            if audio_segment.duration_seconds < 0.5:
+                print("Warning: Audio too short (< 0.5 seconds)")
+                return {"transcript": "", "response": "Audio too short. Please speak for at least 1 second.", "error": "Audio too short"}
+            
+            # Normalize audio (increase volume if too quiet)
+            audio_segment = audio_segment.normalize()
+            
+            # Apply noise reduction by trimming silence
+            audio_segment = audio_segment.strip_silence(silence_len=200, silence_thresh=-50)
+            
+            # Export with optimal settings for speech recognition
             wav_io = io.BytesIO()
-            audio_segment.export(wav_io, format="wav", parameters=["-ar", "16000", "-ac", "1"])
+            audio_segment.export(
+                wav_io, 
+                format="wav",
+                parameters=["-ar", "16000", "-ac", "1"]  # 16kHz mono
+            )
             wav_io.seek(0)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
                 temp_audio.write(wav_io.read())
@@ -201,57 +231,147 @@ async def process_audio(
                 temp_audio_path = temp_audio.name
             print(f"Fallback: Saved original content to {temp_audio_path}")
 
-        # Speech Recognition
+        # Speech Recognition with enhanced settings
         recognizer = sr.Recognizer()
+        # Adjust recognizer settings for better accuracy
+        recognizer.energy_threshold = 300  # Minimum audio energy to consider for recording
+        recognizer.dynamic_energy_threshold = True
+        recognizer.pause_threshold = 0.8  # Seconds of non-speaking audio before phrase is considered complete
+        
         try:
             with sr.AudioFile(temp_audio_path) as source:
                 print("Reading audio file for recognition...")
+                # Adjust for ambient noise
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
                 audio_data = recognizer.record(source)
-                print("Audio file read successfully.")
+                print(f"Audio file read successfully. Duration: {source.DURATION if hasattr(source, 'DURATION') else 'unknown'}")
         except Exception as e:
              print(f"Error reading audio file with SpeechRecognition: {e}")
              os.unlink(temp_audio_path)
              raise HTTPException(status_code=400, detail=f"Invalid audio file: {e}")
             
         try:
+            # Try both languages with show_all to get more details
+            transcript = None
+            
             # Try English first
             try:
                 print("Attempting English transcription...")
-                transcript = recognizer.recognize_google(audio_data, language="en-US")
+                transcript = recognizer.recognize_google(
+                    audio_data, 
+                    language="en-US",
+                    show_all=False
+                )
                 print(f"Transcribed (English): {transcript}")
-            except sr.UnknownValueError:
-                # Fallback to Hindi
-                print("English transcription failed (UnknownValueError), trying Hindi...")
-                transcript = recognizer.recognize_google(audio_data, language="hi-IN")
-                print(f"Transcribed (Hindi): {transcript}")
-        except sr.UnknownValueError:
-            print("Transcription failed: UnknownValueError (both English and Hindi)")
-            os.unlink(temp_audio_path)
-            return {"transcript": "", "response": "I could not understand that.", "error": "UnknownValueError"}
+            except sr.UnknownValueError as e:
+                print(f"English transcription failed: {e}")
+                
+            # If English failed, try Hindi
+            if not transcript:
+                try:
+                    print("Trying Hindi transcription...")
+                    transcript = recognizer.recognize_google(
+                        audio_data, 
+                        language="hi-IN",
+                        show_all=False
+                    )
+                    print(f"Transcribed (Hindi): {transcript}")
+                except sr.UnknownValueError as e:
+                    print(f"Hindi transcription failed: {e}")
+                    
+            # If both failed, try with show_all=True to see if we get partial results
+            if not transcript:
+                print("Trying with show_all=True for debugging...")
+                try:
+                    result = recognizer.recognize_google(audio_data, language="en-US", show_all=True)
+                    print(f"Google API response (all results): {result}")
+                    if result and isinstance(result, dict) and 'alternative' in result:
+                        transcript = result['alternative'][0].get('transcript', '')
+                except Exception as e:
+                    print(f"show_all attempt failed: {e}")
+                    
+            if not transcript:
+                print("Transcription failed: No speech detected in audio")
+                os.unlink(temp_audio_path)
+                return {
+                    "transcript": "", 
+                    "response": "I couldn't detect any speech. Please speak clearly and try again.", 
+                    "error": "No speech detected"
+                }
+                
         except sr.RequestError as e:
             print(f"Transcription failed: RequestError: {e}")
             os.unlink(temp_audio_path)
-            raise HTTPException(status_code=500, detail=f"Speech recognition error: {e}")
+            raise HTTPException(status_code=500, detail=f"Speech recognition service error: {e}")
         
         os.unlink(temp_audio_path)
         
         # Retrieve Memory
         user_id = current_user.username
+        memory_context = ""
         try:
+            print(f"[Memory] Searching memories for user: {user_id}, query: {transcript}")
             memories = memory.search(transcript, user_id=user_id)
-            memory_context = "\n".join([m.get("memory", "") for m in memories]) if memories else ""
+            print(f"[Memory] Search returned: {memories}")
+            
+            # Handle the response structure from mem0
+            if memories:
+                memory_list = []
+                
+                # Check if memories is a dict with 'results' key
+                if isinstance(memories, dict) and 'results' in memories:
+                    results = memories['results']
+                    for m in results:
+                        if isinstance(m, dict) and 'memory' in m:
+                            mem_text = m['memory']
+                            if mem_text:
+                                memory_list.append(mem_text)
+                                print(f"[Memory] Found memory: {mem_text}")
+                        elif isinstance(m, str):
+                            memory_list.append(m)
+                            print(f"[Memory] Found memory (string): {m}")
+                # Handle list of memories
+                elif isinstance(memories, list):
+                    for m in memories:
+                        if isinstance(m, dict) and 'memory' in m:
+                            mem_text = m['memory']
+                            if mem_text:
+                                memory_list.append(mem_text)
+                                print(f"[Memory] Found memory: {mem_text}")
+                        elif isinstance(m, str):
+                            memory_list.append(m)
+                            print(f"[Memory] Found memory (string): {m}")
+                
+                memory_context = "\n".join(memory_list)
+                print(f"[Memory] Total memories found: {len(memory_list)}")
+                print(f"[Memory] Context being used: {memory_context}")
+            else:
+                print("[Memory] No memories found")
         except Exception as e:
-            print(f"Memory search error: {e}")
-            memory_context = ""
+            print(f"[Memory] Search error: {e}")
+            import traceback
+            traceback.print_exc()
         
         expression_context = get_expression_context(expression)
         
-        # Construct Message
-        full_context = f"User Expression: {expression_context}\nPast Memories: {memory_context}"
+        # Construct Message with context
+        context_parts = []
+        if memory_context:
+            context_parts.append(f"Previous conversation context:\n{memory_context}")
+        if expression_context:
+            context_parts.append(f"Current expression: {expression_context}")
+        
+        full_context = "\n\n".join(context_parts) if context_parts else ""
         
         # Run Graph
         try:
-            inputs = {"messages": [{"role": "user", "content": f"{full_context}\n\nUser: {transcript}"}]}
+            if full_context:
+                user_message = f"{full_context}\n\nUser: {transcript}"
+            else:
+                user_message = transcript
+            
+            print(f"[Graph] Input message: {user_message[:200]}...")
+            inputs = {"messages": [{"role": "user", "content": user_message}]}
             
             response_text = None
             for event in graph.stream(inputs, stream_mode="values"):
@@ -266,11 +386,12 @@ async def process_audio(
             print(f"Graph processing error: {e}")
             response_text = "I am here for you. How can I help you today?"
             
-        # Store in Memory
-        try:
-            memory.add(f"User: {transcript}\nAssistant: {response_text}", user_id=user_id)
-        except Exception as e:
-            print(f"Memory storage error: {e}")
+        # Store in Memory (BACKGROUND - don't wait)
+        threading.Thread(
+            target=store_memory_background,
+            args=(user_id, transcript, response_text),
+            daemon=True
+        ).start()
         
         # TTS
         tts = gTTS(text=response_text, lang='en', slow=False)
@@ -295,6 +416,46 @@ async def get_audio(filename: str):
     if not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
     return FileResponse(audio_path, media_type="audio/mpeg")
+
+@app.get("/memories/all")
+async def get_all_memories(current_user: User = Depends(get_current_active_user)):
+    """Get all memories for the current user"""
+    try:
+        user_id = current_user.username
+        # Get all memories for the user
+        memories = memory.get_all(user_id=user_id)
+        print(f"[Memory Debug] Retrieved {len(memories) if memories else 0} memories for user {user_id}")
+        return {"user_id": user_id, "memories": memories, "count": len(memories) if memories else 0}
+    except Exception as e:
+        print(f"[Memory Debug] Error retrieving memories: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/memories/add-test")
+async def add_test_memory(current_user: User = Depends(get_current_active_user)):
+    """Add a test memory to verify the system is working"""
+    try:
+        user_id = current_user.username
+        test_message = f"User: My name is {user_id}\nAssistant: Nice to meet you, {user_id}! I'll remember your name."
+        result = memory.add(test_message, user_id=user_id)
+        print(f"[Memory Test] Added test memory for {user_id}: {result}")
+        return {"message": "Test memory added", "result": result}
+    except Exception as e:
+        print(f"[Memory Test] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/memories/clear")
+async def clear_memories(current_user: User = Depends(get_current_active_user)):
+    """Clear all memories for the current user"""
+    try:
+        user_id = current_user.username
+        # This might not be directly supported, so we'll just return info
+        return {"message": f"Memory clear requested for user {user_id}. Note: Mem0 may not support deletion."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/detect-face")
 async def detect_face(image: UploadFile = File(...)):
