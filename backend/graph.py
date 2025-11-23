@@ -6,12 +6,14 @@ from langgraph.graph import StateGraph, START, END
 from langchain.chat_models import init_chat_model
 from dotenv import load_dotenv
 import os
+from qdrant_config import get_qdrant_client
 
 # Load environment variables
 load_dotenv()
 
 # Initialize LLM with explicit API key from environment
 llm = None
+qdrant_client = None
 
 def get_llm():
     global llm
@@ -23,6 +25,13 @@ def get_llm():
             raise ValueError("GOOGLE_API_KEY not found in environment variables")
         llm = init_chat_model(model_provider="google_genai", model="gemini-2.5-flash-lite", api_key=api_key)
     return llm
+
+def get_qdrant():
+    """Get Qdrant client instance"""
+    global qdrant_client
+    if qdrant_client is None:
+        qdrant_client = get_qdrant_client()
+    return qdrant_client
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]

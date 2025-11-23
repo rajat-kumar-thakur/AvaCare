@@ -13,7 +13,7 @@ import threading
 import asyncio
 import cv2
 import numpy as np
-from graph import graph, get_llm
+from graph import graph, get_llm, get_qdrant
 from dotenv import load_dotenv
 from pydub import AudioSegment
 import io
@@ -38,7 +38,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Mem0 with Gemini embeddings and MongoDB vector store
+# Initialize Qdrant client
+qdrant_client = get_qdrant()
+
+# Initialize Mem0 with Gemini embeddings and Qdrant Cloud vector store
 config = {
     "llm": {
         "provider": "gemini",
@@ -56,14 +59,13 @@ config = {
     "vector_store": {
         "provider": "qdrant",
         "config": {
-            "collection_name": "avacare_memories_v4",  # New collection name to avoid dimension conflict
-            "host": "localhost",
-            "port": 6333,
+            "collection_name": "avacare_memories_v4",
+            "url": os.getenv("QDRANT_URL"),
+            "api_key": os.getenv("QDRANT_API_KEY"),
             "embedding_model_dims": 768  # Gemini text-embedding-004 uses 768 dimensions
         }
     }
 }
-print(f"Memory Config: {config}")
 memory = Memory.from_config(config)
 
 # Global state (still needed for face detection context, though per-user would be better)
@@ -136,13 +138,9 @@ def store_memory_background(user_id: str, transcript: str, response_text: str):
     """Store memory in background thread"""
     try:
         conversation = f"User: {transcript}\nAssistant: {response_text}"
-        print(f"[Memory BG] Storing conversation for user {user_id}: {conversation[:100]}...")
         result = memory.add(conversation, user_id=user_id)
-        print(f"[Memory BG] Storage complete: {result}")
     except Exception as e:
-        print(f"[Memory BG] Storage error: {e}")
-        import traceback
-        traceback.print_exc()
+        pass
 
 @app.post("/auth/signup", response_model=Token)
 async def signup(user: UserCreate):
@@ -195,14 +193,10 @@ async def process_audio(
         
         # Convert to wav with enhanced processing
         try:
-            print(f"Received audio file: {audio.filename}, content_type: {audio.content_type}")
             audio_segment = AudioSegment.from_file(io.BytesIO(content))
-            print(f"Audio duration: {audio_segment.duration_seconds:.2f} seconds")
-            print(f"Audio channels: {audio_segment.channels}, frame_rate: {audio_segment.frame_rate}")
             
             # Check if audio is too short
             if audio_segment.duration_seconds < 0.5:
-                print("Warning: Audio too short (< 0.5 seconds)")
                 return {"transcript": "", "response": "Audio too short. Please speak for at least 1 second.", "error": "Audio too short"}
             
             # Normalize audio (increase volume if too quiet)
@@ -222,14 +216,11 @@ async def process_audio(
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
                 temp_audio.write(wav_io.read())
                 temp_audio_path = temp_audio.name
-            print(f"Saved temporary WAV file to: {temp_audio_path}, size: {os.path.getsize(temp_audio_path)} bytes")
         except Exception as e:
-            print(f"Audio conversion error: {e}")
             # Fallback: try using the original content if it might be wav already
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
                 temp_audio.write(content)
                 temp_audio_path = temp_audio.name
-            print(f"Fallback: Saved original content to {temp_audio_path}")
 
         # Speech Recognition with enhanced settings
         recognizer = sr.Recognizer()
@@ -240,13 +231,10 @@ async def process_audio(
         
         try:
             with sr.AudioFile(temp_audio_path) as source:
-                print("Reading audio file for recognition...")
                 # Adjust for ambient noise
                 recognizer.adjust_for_ambient_noise(source, duration=0.5)
                 audio_data = recognizer.record(source)
-                print(f"Audio file read successfully. Duration: {source.DURATION if hasattr(source, 'DURATION') else 'unknown'}")
         except Exception as e:
-             print(f"Error reading audio file with SpeechRecognition: {e}")
              os.unlink(temp_audio_path)
              raise HTTPException(status_code=400, detail=f"Invalid audio file: {e}")
             
@@ -256,42 +244,35 @@ async def process_audio(
             
             # Try English first
             try:
-                print("Attempting English transcription...")
                 transcript = recognizer.recognize_google(
                     audio_data, 
                     language="en-US",
                     show_all=False
                 )
-                print(f"Transcribed (English): {transcript}")
             except sr.UnknownValueError as e:
-                print(f"English transcription failed: {e}")
+                pass
                 
             # If English failed, try Hindi
             if not transcript:
                 try:
-                    print("Trying Hindi transcription...")
                     transcript = recognizer.recognize_google(
                         audio_data, 
                         language="hi-IN",
                         show_all=False
                     )
-                    print(f"Transcribed (Hindi): {transcript}")
                 except sr.UnknownValueError as e:
-                    print(f"Hindi transcription failed: {e}")
+                    pass
                     
             # If both failed, try with show_all=True to see if we get partial results
             if not transcript:
-                print("Trying with show_all=True for debugging...")
                 try:
                     result = recognizer.recognize_google(audio_data, language="en-US", show_all=True)
-                    print(f"Google API response (all results): {result}")
                     if result and isinstance(result, dict) and 'alternative' in result:
                         transcript = result['alternative'][0].get('transcript', '')
                 except Exception as e:
-                    print(f"show_all attempt failed: {e}")
+                    pass
                     
             if not transcript:
-                print("Transcription failed: No speech detected in audio")
                 os.unlink(temp_audio_path)
                 return {
                     "transcript": "", 
@@ -300,7 +281,6 @@ async def process_audio(
                 }
                 
         except sr.RequestError as e:
-            print(f"Transcription failed: RequestError: {e}")
             os.unlink(temp_audio_path)
             raise HTTPException(status_code=500, detail=f"Speech recognition service error: {e}")
         
@@ -310,9 +290,7 @@ async def process_audio(
         user_id = current_user.username
         memory_context = ""
         try:
-            print(f"[Memory] Searching memories for user: {user_id}, query: {transcript}")
             memories = memory.search(transcript, user_id=user_id)
-            print(f"[Memory] Search returned: {memories}")
             
             # Handle the response structure from mem0
             if memories:
@@ -326,10 +304,8 @@ async def process_audio(
                             mem_text = m['memory']
                             if mem_text:
                                 memory_list.append(mem_text)
-                                print(f"[Memory] Found memory: {mem_text}")
                         elif isinstance(m, str):
                             memory_list.append(m)
-                            print(f"[Memory] Found memory (string): {m}")
                 # Handle list of memories
                 elif isinstance(memories, list):
                     for m in memories:
@@ -337,20 +313,12 @@ async def process_audio(
                             mem_text = m['memory']
                             if mem_text:
                                 memory_list.append(mem_text)
-                                print(f"[Memory] Found memory: {mem_text}")
                         elif isinstance(m, str):
                             memory_list.append(m)
-                            print(f"[Memory] Found memory (string): {m}")
                 
                 memory_context = "\n".join(memory_list)
-                print(f"[Memory] Total memories found: {len(memory_list)}")
-                print(f"[Memory] Context being used: {memory_context}")
-            else:
-                print("[Memory] No memories found")
         except Exception as e:
-            print(f"[Memory] Search error: {e}")
-            import traceback
-            traceback.print_exc()
+            pass
         
         expression_context = get_expression_context(expression)
         

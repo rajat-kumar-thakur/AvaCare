@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/theme-toggle';
+import { ArrowLeft } from 'lucide-react';
 
 const loginSchema = z.object({
     username: z.string().min(3, 'Username must be at least 3 characters'),
@@ -51,6 +52,14 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors duration-300 relative">
+            <div className="absolute top-4 left-4">
+                <Link href="/">
+                    <Button variant="ghost" size="sm" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back
+                    </Button>
+                </Link>
+            </div>
             <div className="absolute top-4 right-4">
                 <ModeToggle />
             </div>

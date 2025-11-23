@@ -60,7 +60,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             # Try passlib for other hash formats
             return pwd_context.verify(plain_password, hashed_password)
     except Exception as e:
-        print(f"Password verification error: {e}")
         return False
 
 def get_password_hash(password: str) -> str:

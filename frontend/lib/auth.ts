@@ -1,7 +1,7 @@
 import Cookies from 'js-cookie';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const setToken = (token: string) => {
   Cookies.set('token', token, { expires: 1 }); // 1 day
@@ -30,3 +30,12 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+export const getCurrentUser = async () => {
+  try {
+    const response = await api.get('/users/me');
+    return response.data;
+  } catch (error) {
+    return null;
+  }
+};

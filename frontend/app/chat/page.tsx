@@ -4,11 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, LogOut, Sparkles, Volume2, StopCircle } from 'lucide-react';
+import { Mic, LogOut, Volume2, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { api, isAuthenticated, removeToken } from '@/lib/auth';
+import { api, isAuthenticated, removeToken, getCurrentUser } from '@/lib/auth';
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/theme-toggle';
 
@@ -19,18 +19,32 @@ interface Message {
     audioUrl?: string;
 }
 
+interface User {
+    username: string;
+    email: string;
+    full_name: string;
+}
+
 export default function ChatPage() {
     const router = useRouter();
     const [messages, setMessages] = useState<Message[]>([]);
     const [isRecording, setIsRecording] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+    const [user, setUser] = useState<User | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
         if (!isAuthenticated()) {
             router.push('/login');
+        } else {
+            // Fetch user data
+            getCurrentUser().then(userData => {
+                if (userData) {
+                    setUser(userData);
+                }
+            });
         }
     }, [router]);
 
@@ -66,7 +80,6 @@ export default function ChatPage() {
             setMediaRecorder(recorder);
             setIsRecording(true);
         } catch (error) {
-            console.error('Error accessing microphone:', error);
             toast.error('Microphone access denied or format not supported');
         }
     };
@@ -116,9 +129,6 @@ export default function ChatPage() {
             {/* Header */}
             <header className="sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-6 py-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-900 dark:bg-white rounded-lg flex items-center justify-center">
-                        <Sparkles className="w-4 h-4 text-white dark:text-slate-900" />
-                    </div>
                     <span className="font-semibold text-slate-900 dark:text-white tracking-tight">AvaCare</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -178,7 +188,7 @@ export default function ChatPage() {
                                     ) : (
                                         <Avatar className="w-8 h-8 bg-slate-200 dark:bg-slate-800">
                                             <AvatarFallback className="text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-800">
-                                                U
+                                                {user?.full_name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase() || 'U'}
                                             </AvatarFallback>
                                         </Avatar>
                                     )}
