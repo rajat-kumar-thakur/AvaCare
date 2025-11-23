@@ -2,13 +2,7 @@
   "name": "avacare-root",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.21.0",
   "scripts": {
-    "build": "pnpm --filter frontend build",
-    "dev": "pnpm --filter frontend dev",
-    "start": "pnpm --filter frontend start"
-  },
-  "pnpm": {
-    "overrides": {}
+    "build": "echo 'Build handled by Vercel'"
   }
 }

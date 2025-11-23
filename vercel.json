@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd frontend && pnpm run build",
+  "buildCommand": "cd frontend && pnpm install && pnpm run build",
   "outputDirectory": "frontend/.next",
-  "installCommand": "pnpm install --filter frontend..."
+  "installCommand": "echo 'Dependencies will be installed during build'"
 }

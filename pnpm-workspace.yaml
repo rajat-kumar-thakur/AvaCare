@@ -1,2 +1,2 @@
-packages:
-  - 'frontend'
+# Workspace disabled - using simple structure
+packages: []
