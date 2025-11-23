@@ -12,7 +12,7 @@ interface ExpressionDetectorProps {
 }
 
 const BACKEND_URL = typeof window !== 'undefined' 
-  ? (process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000")
+  ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
   : "http://localhost:8000"
 
 export default function ExpressionDetector({ webcamRef, onExpressionChange, onFaceDetected }: ExpressionDetectorProps) {

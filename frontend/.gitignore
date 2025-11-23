@@ -1,0 +1,16 @@
+# Local env files
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# Testing
+coverage
+.pytest_cache
+
+# Misc
+.DS_Store
+*.pem

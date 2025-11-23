@@ -12,6 +12,8 @@ import { api, isAuthenticated, removeToken, getCurrentUser } from '@/lib/auth';
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/theme-toggle';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface Message {
     id: string;
     role: 'user' | 'assistant';
@@ -108,7 +110,7 @@ export default function ChatPage() {
             ]);
 
             if (audio_url) {
-                const audio = new Audio(`http://localhost:8000${audio_url}`);
+                const audio = new Audio(`${API_URL}${audio_url}`);
                 audio.play();
                 audioRef.current = audio;
             }
@@ -209,7 +211,7 @@ export default function ChatPage() {
                                                 size="sm"
                                                 className="h-6 px-2 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white"
                                                 onClick={() => {
-                                                    const audio = new Audio(`http://localhost:8000${msg.audioUrl}`);
+                                                    const audio = new Audio(`${API_URL}${msg.audioUrl}`);
                                                     audio.play();
                                                 }}
                                             >
