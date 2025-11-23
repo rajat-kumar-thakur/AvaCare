@@ -29,15 +29,10 @@ load_dotenv()
 
 app = FastAPI()
 
-# CORS middleware - Updated for production
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:3001",
-        "https://*.vercel.app",  # Allow all Vercel preview deployments
-        os.getenv("FRONTEND_URL", "")  # Production frontend URL from env
-    ],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
