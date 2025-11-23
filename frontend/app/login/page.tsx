@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { api, setToken } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,14 @@ export default function LoginPage() {
                 className="w-full max-w-sm bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800"
             >
                 <div className="text-center mb-8">
+                    <div className="relative w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700">
+                        <Image
+                            src="/therapist.jpg"
+                            alt="AvaCare Therapist"
+                            fill
+                            className="object-cover"
+                        />
+                    </div>
                     <h1 className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">Welcome Back</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Sign in to continue to AvaCare</p>
                 </div>

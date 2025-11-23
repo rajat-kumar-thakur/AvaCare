@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, LogOut, Sparkles, Volume2, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -142,8 +143,13 @@ export default function ChatPage() {
                                     exit={{ opacity: 0 }}
                                     className="text-center mt-20 space-y-4"
                                 >
-                                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-900 rounded-2xl mx-auto flex items-center justify-center">
-                                        <Sparkles className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+                                    <div className="relative w-24 h-24 mx-auto rounded-full overflow-hidden border-4 border-slate-200 dark:border-slate-800 shadow-lg">
+                                        <Image
+                                            src="/therapist.jpg"
+                                            alt="Your AI Therapist"
+                                            fill
+                                            className="object-cover"
+                                        />
                                     </div>
                                     <div>
                                         <h2 className="text-xl font-medium text-slate-900 dark:text-white">How can I help you today?</h2>
@@ -160,11 +166,22 @@ export default function ChatPage() {
                                     exit={{ opacity: 0, y: -10 }}
                                     className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                                 >
-                                    <Avatar className={`w-8 h-8 ${msg.role === 'assistant' ? 'bg-slate-900 dark:bg-white' : 'bg-slate-200 dark:bg-slate-800'}`}>
-                                        <AvatarFallback className={msg.role === 'assistant' ? 'text-white dark:text-slate-900 bg-slate-900 dark:bg-white' : 'text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-800'}>
-                                            {msg.role === 'assistant' ? 'A' : 'U'}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    {msg.role === 'assistant' ? (
+                                        <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 flex-shrink-0">
+                                            <Image
+                                                src="/therapist.jpg"
+                                                alt="Therapist"
+                                                fill
+                                                className="object-cover"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <Avatar className="w-8 h-8 bg-slate-200 dark:bg-slate-800">
+                                            <AvatarFallback className="text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-800">
+                                                U
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    )}
 
                                     <div className={`flex flex-col gap-2 max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                         <div
@@ -201,9 +218,14 @@ export default function ChatPage() {
                                     exit={{ opacity: 0 }}
                                     className="flex gap-4"
                                 >
-                                    <Avatar className="w-8 h-8 bg-slate-900 dark:bg-white">
-                                        <AvatarFallback className="text-white dark:text-slate-900 bg-slate-900 dark:bg-white">A</AvatarFallback>
-                                    </Avatar>
+                                    <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 flex-shrink-0">
+                                        <Image
+                                            src="/therapist.jpg"
+                                            alt="Therapist"
+                                            fill
+                                            className="object-cover"
+                                        />
+                                    </div>
                                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-1.5">
                                         <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                         <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

@@ -13,6 +13,24 @@ export const metadata: Metadata = {
   title: "AvaCare - Your Mental Health Companion",
   description: "Compassionate, multilingual AI support for your mental well-being.",
   generator: "v0.app",
+  applicationName: "AvaCare",
+  appleWebApp: {
+    capable: true,
+    title: "AvaCare",
+    statusBarStyle: "default",
+  },
+  manifest: "/site.webmanifest",
+  icons: {
+    icon: [
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/favicon-96x96.png',
+  },
 }
 
 export default function RootLayout({
