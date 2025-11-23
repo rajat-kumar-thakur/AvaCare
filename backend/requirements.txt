@@ -14,3 +14,10 @@ langgraph
 pydub
 requests
 pyaudio
+mem0ai
+python-jose[cryptography]
+passlib[bcrypt]
+motor
+openai
+qdrant-client
+google-genai
