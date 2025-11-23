@@ -4,8 +4,7 @@ python-multipart
 python-dotenv
 SpeechRecognition
 gtts
-pygame
-opencv-python
+opencv-python-headless
 numpy
 langchain
 langchain-openai
@@ -13,7 +12,6 @@ langchain-google-genai
 langgraph
 pydub
 requests
-pyaudio
 mem0ai
 python-jose[cryptography]
 passlib[bcrypt]
