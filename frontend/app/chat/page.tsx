@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { ModeToggle } from '@/components/theme-toggle';
 
 interface Message {
+    id: string;
     role: 'user' | 'assistant';
     content: string;
     audioUrl?: string;
@@ -41,12 +42,22 @@ export default function ChatPage() {
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
+            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             const chunks: Blob[] = [];
 
-            recorder.ondataavailable = (e) => chunks.push(e.data);
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunks.push(e.data);
+            };
+
+            const startTime = Date.now();
+
             recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'audio/wav' });
+                const duration = Date.now() - startTime;
+                if (duration < 500) {
+                    toast.error('Recording too short');
+                    return;
+                }
+                const blob = new Blob(chunks, { type: 'audio/webm' });
                 await processAudio(blob);
             };
 
@@ -54,7 +65,8 @@ export default function ChatPage() {
             setMediaRecorder(recorder);
             setIsRecording(true);
         } catch (error) {
-            toast.error('Microphone access denied');
+            console.error('Error accessing microphone:', error);
+            toast.error('Microphone access denied or format not supported');
         }
     };
 
@@ -69,7 +81,7 @@ export default function ChatPage() {
     const processAudio = async (audioBlob: Blob) => {
         setIsProcessing(true);
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.wav');
+        formData.append('audio', audioBlob, 'recording.webm');
 
         try {
             const response = await api.post('/process-audio', formData);
@@ -77,8 +89,8 @@ export default function ChatPage() {
 
             setMessages(prev => [
                 ...prev,
-                { role: 'user', content: transcript },
-                { role: 'assistant', content: aiResponse, audioUrl: audio_url }
+                { id: `user-${Date.now()}`, role: 'user', content: transcript },
+                { id: `assistant-${Date.now()}-${Math.random()}`, role: 'assistant', content: aiResponse, audioUrl: audio_url }
             ]);
 
             if (audio_url) {
@@ -121,11 +133,13 @@ export default function ChatPage() {
             <main className="flex-1 max-w-3xl w-full mx-auto p-4 flex flex-col">
                 <ScrollArea className="flex-1 pr-4">
                     <div className="space-y-8 py-4">
-                        <AnimatePresence>
+                        <AnimatePresence mode="wait">
                             {messages.length === 0 && (
                                 <motion.div
+                                    key="empty-state"
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0 }}
                                     className="text-center mt-20 space-y-4"
                                 >
                                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-900 rounded-2xl mx-auto flex items-center justify-center">
@@ -138,11 +152,12 @@ export default function ChatPage() {
                                 </motion.div>
                             )}
 
-                            {messages.map((msg, i) => (
+                            {messages.map((msg) => (
                                 <motion.div
-                                    key={i}
+                                    key={msg.id}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
                                     className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                                 >
                                     <Avatar className={`w-8 h-8 ${msg.role === 'assistant' ? 'bg-slate-900 dark:bg-white' : 'bg-slate-200 dark:bg-slate-800'}`}>
@@ -180,8 +195,10 @@ export default function ChatPage() {
 
                             {isProcessing && (
                                 <motion.div
+                                    key="processing"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
                                     className="flex gap-4"
                                 >
                                     <Avatar className="w-8 h-8 bg-slate-900 dark:bg-white">
