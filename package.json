@@ -1,0 +1,13 @@
+{
+  "name": "avacare-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && pnpm run build",
+    "dev": "cd frontend && pnpm run dev",
+    "start": "cd frontend && pnpm run start"
+  },
+  "workspaces": [
+    "frontend"
+  ]
+}
